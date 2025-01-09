@@ -10,6 +10,10 @@ on:
         description: 'Branch pattern'
         required: true
 
+permissions:
+  contents: write
+  administration: write
+
 jobs:
   protect-branch:
     runs-on: ubuntu-latest
