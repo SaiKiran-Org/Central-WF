@@ -4,40 +4,29 @@ on:
   workflow_dispatch:
     inputs:
       repository:
-        description: 'Repository to add branch protection'
+        description: 'Repository'
         required: true
       branch_pattern:
-        description: 'Branch pattern to protect'
-        required: true
-      environment:
-        description: 'Environment for the branch protection'
+        description: 'Branch pattern'
         required: true
 
 jobs:
   protect-branch:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Add Branch Protection
+    - name: Add Branch Protection Rule
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         REPOSITORY: ${{ github.event.inputs.repository }}
         BRANCH_PATTERN: ${{ github.event.inputs.branch_pattern }}
-        ENVIRONMENT: ${{ github.event.inputs.environment }}
       run: |
         curl -X PUT \
           -H "Authorization: token $GITHUB_TOKEN" \
           -H "Accept: application/vnd.github+json" \
           https://api.github.com/repos/$REPOSITORY/branches/$BRANCH_PATTERN/protection \
           -d '{
-            "required_status_checks": {
-              "strict": true,
-              "contexts": []
-            },
+            "required_status_checks": null,
             "enforce_admins": true,
-            "required_pull_request_reviews": {
-              "required_approving_review_count": 1
-            },
-            "restrictions": null,
-            "environments": ["$ENVIRONMENT"]
+            "required_pull_request_reviews": {"required_approving_review_count": 1},
+            "restrictions": null
           }'
