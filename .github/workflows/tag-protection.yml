@@ -13,13 +13,9 @@ on:
         type: string
         required: true
       environment:
-        description: 'Environment to apply protection'
-        type: choice
+        description: 'Environment to apply protection (e.g., development, staging, production)'
+        type: string
         required: true
-        options:
-          - development
-          - staging
-          - production
 
 jobs:
   add_tag_protection:
