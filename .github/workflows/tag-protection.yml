@@ -17,10 +17,6 @@ on:
         type: string
         required: true
 
-permissions:
-  contents: write
-  deployments: write
-
 jobs:
   add_tag_protection:
     runs-on: ubuntu-latest
@@ -28,10 +24,9 @@ jobs:
     
     steps:
       - name: Check Repository Access
-        id: check_access
         run: |
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}")
           
@@ -42,39 +37,41 @@ jobs:
             exit 1
           fi
 
-      - name: Add Deployment Protection Rule
-        if: steps.check_access.outcome == 'success'
+      - name: Create Environment
         run: |
-          curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment }}/deployment-protection-rules" \
-            -d '{
-              "tag_name_pattern": "${{ github.event.inputs.tag_pattern }}"
-            }'
-
-      - name: Add Tag Protection
-        run: |
-          curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/tags/protection" \
-            -d '{
-              "pattern": "${{ github.event.inputs.tag_pattern }}",
-              "enabled": true
-            }'
-
-      - name: Verify Protection Rules
-        if: success()
-        run: |
-          echo "Checking environment deployment protection rules..."
-          curl -s \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          curl -X PUT \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment }}"
-          
-          echo "\nChecking tag protection rules..."
-          curl -s \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+
+      - name: Configure Environment Protection Rules
+        run: |
+          curl -X PUT \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/tags/protection" | jq '.'
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment }}" \
+            -d '{
+              "deployment_branch_policy": {
+                "protected_branches": false,
+                "custom_branch_policies": true
+              }
+            }'
+
+      - name: Add Tag Rule to Environment
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment }}/deployment_branch_policies" \
+            -d '{
+              "name": "${{ github.event.inputs.tag_pattern }}",
+              "type": "tag"
+            }'
+
+      - name: Verify Rules
+        run: |
+          echo "Checking environment deployment branch policies..."
+          curl -s \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment }}/deployment_branch_policies"
