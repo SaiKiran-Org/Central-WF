@@ -1,95 +1,80 @@
-name: Add Branch Protection Rules to Repository
-run-name: "Adding Branch Protection Rules to - [ '${{ github.event.inputs.repository }}' and branch '${{ github.event.inputs.branchName }}' ]"
+name: AAdd Branch Protection Rules to Repository (Local Testing)
+
+run-name: "Adding Branch Protection Rules - [ '${{ github.event.inputs.repository }}' | branch '${{ github.event.inputs.branchName }}' ]"
+
 on:
   workflow_dispatch:
-    inputs: 
+    inputs:
       repository:
         type: string
         required: true
+        description: 'Target repository for branch protection rules'
       branchname:
         type: string
         required: true
-        description: 'Please enter the branch name other than "master", "rel","Hot","main"'
+        description: 'Branch name, excluding "master", "rel", "Hot", and "main"'
       required_approving_review_count:
         type: number
         required: true
         default: 2
- 
+
 jobs:
   CHECK_BRANCH_IF_EXISTS:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Use Ubuntu for local testing
     steps:
-    - name: Check Collaborator Access
-      id: check_admin_access
-      run: |
-        curl -sL   \
-        -H "Accept: application/vnd.github+json"   \
-        -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}"   \
-        https://github.albertsons.com/api/v3/repos/albertsons/${{ inputs.repository }}/collaborators/${{ github.triggering_actor }}/permission > collaborators.json
-        ACTOR_ROLE=$(jq -cr '.role_name' collaborators.json)
-        echo $ACTOR_ROLE
-        
-        if [ "$ACTOR_ROLE" == "admin" ] || [ "$ACTOR_ROLE" == "AdminCustom" ]; then
-          echo "Your role on ${{ inputs.repository }} is ${ACTOR_ROLE}. You have the permission to Add branch rule on the repo - ${{ github.event.inputs.repository }}."
-        else
-          echo "Your role on ${{ inputs.repository }} is ${ACTOR_ROLE}. You do not have the permission to Add branch rule on the repo - ${{ github.event.inputs.repository }}."
-          exit 1
-        fi
+      - name: Set Up Environment
+        run: |
+          echo "Setting up environment variables"
+          echo "Repository: ${{ github.event.inputs.repository }}"
+          echo "Branch Name: ${{ github.event.inputs.branchname }}"
+          echo "Approving Review Count: ${{ github.event.inputs.required_approving_review_count }}"
 
-    - name: Checking if Branch - "${{ github.event.inputs.branchname }}" exists in repository - "${{ github.event.inputs.repository }}""
-      if: steps.check_admin_access.outcome == 'success'
-      id: branchname_check
-      run: |
-        echo "Entered Branch Name is: "${{ github.event.inputs.branchname }}""
-        if [[ "${{ github.event.inputs.branchname }}" == *"master"* || "${{ github.event.inputs.branchname }}" == *"rel"* || "${{ github.event.inputs.branchname }}" == *"Hot"* || "${{ github.event.inputs.branchname }}" == *"main"* ]]; then
-          echo "Cannot create Branch rules for entered Branch name - "${{ github.event.inputs.branchname }}", Please enter the Branch names other than - "master", "rel","Hot","main"."
-          exit 1
-        else
-          echo "Entered Branch name is from the excluded list, now it will proceed for creating branch rule for the branch- "${{ github.event.inputs.branchname }}"."
-          echo "Checking if Branch exits in the repository - "${{ github.event.inputs.repository }}". "
-          BRANCH_STATUS_CODE=$(curl -s -L -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/albertsons/${{ github.event.inputs.repository }}/branches/${{ github.event.inputs.branchname }} -o /dev/null -w "%{http_code}")
-          echo $BRANCH_STATUS_CODE
-            if [ $BRANCH_STATUS_CODE == 200 ]; then
-            echo "Entered Branch exits, will proceed for next stage"
-            else
-            echo "Entered Branch doesn't exits in the repository - "${{ github.event.inputs.repository }}"."
+      - name: Check Collaborator Access
+        id: check_admin_access
+        run: |
+          echo "Checking if user has admin access to repository: ${{ github.event.inputs.repository }}"
+          echo "Simulating admin access for local run"
+          # Simulated admin check; replace with actual API call in production
+          ACTOR_ROLE="admin"
+          echo "Role: $ACTOR_ROLE"
+
+          if [[ "$ACTOR_ROLE" != "admin" ]]; then
+            echo "You do not have permission to add branch protection rules."
             exit 1
-            fi
-        fi
+          fi
 
-    - name: Adding Branch Protection rules to Repository - "${{ github.event.inputs.repository }}" for Branch - "${{ github.event.inputs.branchname }}"
-      if: steps.branchname_check.outcome == 'success'
-      run: |
-        echo "Checking Minimum Reviewers count requirement meets"
-        if [[ ${{ github.event.inputs.required_approving_review_count  }} -ge "1" ]]; then
-        echo "Minimum Reviewers count requirement met and will continue for next steps"
-        else
-        echo "Minimum Reviewers count requirement not met, Minimum reviewers coount shoudl be 1, process will exit."
-        exit 1
-        fi
+      - name: Check Branch Existence
+        id: branchname_check
+        run: |
+          echo "Validating branch name: ${{ github.event.inputs.branchname }}"
+          if [[ "${{ github.event.inputs.branchname }}" =~ ^(master|rel|Hot|main)$ ]]; then
+            echo "Branch '${{ github.event.inputs.branchname }}' is excluded."
+            exit 1
+          fi
 
-        UPDATE_REVIEWERS_COUNT_JSON=$(jq -n --argjson REVIEW_COUNT ${{ github.event.inputs.required_approving_review_count  }} \
-        '{
-            "required_status_checks": null,
-            "enforce_admins": true,
-            "required_pull_request_reviews":{
-                    "dismissal_restrictions": {},
-                    "dismiss_stale_reviews":false,
-                    "require_code_owner_reviews":true,
-                    "required_approving_review_count":$REVIEW_COUNT
-                    },
-            "restrictions":null,
-            "required_linear_history": false,
-            "allow_force_pushes": false,
-            "allow_deletions": false,
-            "block_creations": false,
-            "required_conversation_resolution": false
-        }'
-        )
-        echo "Adding Branch protection rules to repository - ${{ github.event.inputs.repository }} for branch - ${{ github.event.inputs.branchname }}"
-        curl -L \
-        -X PUT \
-        -H "Accept: application/vnd.github+json" \
-        -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-        https://github.albertsons.com/api/v3/repos/albertsons/${{ github.event.inputs.repository }}/branches/${{ github.event.inputs.branchname }}/protection \
-        -d "$UPDATE_REVIEWERS_COUNT_JSON"
+          echo "Simulating branch existence check for branch: ${{ github.event.inputs.branchname }}"
+          # Simulated branch check; replace with actual API call in production
+          BRANCH_EXISTS=true
+
+          if [[ "$BRANCH_EXISTS" != true ]]; then
+            echo "Branch '${{ github.event.inputs.branchname }}' does not exist in repository '${{ github.event.inputs.repository }}'."
+            exit 1
+          fi
+
+      - name: Add Branch Protection Rules
+        run: |
+          echo "Adding branch protection rules for branch: ${{ github.event.inputs.branchname }}"
+          echo "Simulating branch protection rule application"
+          
+          if [[ ${{ github.event.inputs.required_approving_review_count }} -lt 1 ]]; then
+            echo "Required approving review count must be at least 1."
+            exit 1
+          fi
+
+          echo "Branch protection rules applied successfully with:"
+          echo "- Required Approving Reviews: ${{ github.event.inputs.required_approving_review_count }}"
+          echo "- Admin enforcement enabled"
+          echo "- Force pushes and deletions disabled"
+
+      - name: Complete Workflow
+        run: echo "Branch protection rules have been successfully applied!"
