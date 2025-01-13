@@ -1,0 +1,62 @@
+name: Tag Protection Rules
+run-name: "Adding Tag Protection Rules to ${{ github.event.inputs.repository }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Repository name'
+        type: string
+        required: true
+      tag_pattern:
+        description: 'Tag pattern to protect (e.g., v*, release-*)'
+        type: string
+        required: true
+      environment:
+        description: 'Environment to apply protection'
+        type: environment
+        required: true
+
+jobs:
+  add_tag_protection:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    
+    steps:
+      - name: Check Repository Access
+        id: check_access
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}")
+          
+          if [ "$HTTP_STATUS" -eq "200" ]; then
+            echo "Repository access verified"
+          else
+            echo "Error: Unable to access repository"
+            exit 1
+          fi
+
+      - name: Add Tag Protection
+        if: steps.check_access.outcome == 'success'
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/tags/protection" \
+            -d '{
+              "pattern": "${{ github.event.inputs.tag_pattern }}",
+              "enabled": true
+            }'
+
+      - name: Verify Protection Rule
+        if: success()
+        run: |
+          RESPONSE=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/tags/protection")
+          
+          echo "Current tag protection rules:"
+          echo "$RESPONSE" | jq '.'
