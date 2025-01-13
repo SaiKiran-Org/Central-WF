@@ -1,0 +1,268 @@
+name: veracode-platform-scan-infosec
+
+on:
+ workflow_call:
+   inputs:  
+      VERACODE_APPNAME:
+        required: false 
+        type: string
+      javaVersion:
+        required: false
+        type: number 
+      build_type:
+        required: false
+        type: string
+      FILEPATH:
+        required: false
+        type: string
+      branch_name:
+        required: false
+        type: string
+      TAG:    
+        required: true
+        type: string
+      DOTNET_APPNAME:
+       required: false
+       type: string
+      NODE_VERSION:
+       required: false  
+       type: string 
+      npm_install_command:
+       required: false  
+       type: string
+       default: npm install
+   outputs:
+      veracode_org_variable:
+        description: "Get_org_Variable"
+        value: ${{ jobs.Get_variable.outputs.veracode_org_variable_value }}
+      veracode_repo_variable:
+        description: "Get_repo_Variable"
+        value: ${{ jobs.Get_variable.outputs.veracode_repo_variable_value }} 
+      retrieve_github_tag_var:
+        description: "Get_tag_Variable"
+        value: ${{ jobs.Get_variable.outputs.github_var_val }}
+      retrieve_scan_value_mvn:
+        description: "Get_scan_Variable"
+        value: ${{ jobs.Extract_Scan_value.outputs.github_var_value_after_scan }}
+      retrieve_scan_value_npm:
+        description: "Get_scan_Variable"
+        value: ${{ jobs.Extract_Scan_value.outputs.github_var_value_after_scan }}
+      retrieve_scan_value_dotnet:
+        description: "Get_scan_Variable"
+        value: ${{ jobs.Extract_Scan_value.outputs.github_var_value_after_scan }}
+      retrieve_scan_value_zip:
+        description: "Get_scan_Variable"
+        value: ${{ jobs.Extract_Scan_value.outputs.github_var_value_after_scan }}
+      retrieve_scan_value_tar:
+        description: "Get_scan_Variable"
+        value: ${{ jobs.Extract_Scan_value.outputs.github_var_value_after_scan }}
+      retrieve_scan_value_gradle:
+        description: "Get_scan_Variable"
+        value: ${{ jobs.Extract_Scan_value.outputs.github_var_value_after_scan }}
+      retrieve_scan_value_python:
+        description: "Get_scan_Variable"
+        value: ${{ jobs.Extract_Scan_value.outputs.github_var_value_after_scan }}
+      retrieve_scan_value_mavenmulti:
+        description: "Get_scan_Variable"
+        value: ${{ jobs.Extract_Scan_value.outputs.github_var_value_after_scan }}
+      retrieve_scan_value_node_multi:
+        description: "Get_scan_Variable"
+        value: ${{ jobs.Extract_Scan_value.outputs.github_var_value_after_scan }}
+      retrieve_scan_value_scala:
+        description: "Get_scan_Variable"
+        value: ${{ jobs.Extract_Scan_value.outputs.github_var_value_after_scan }}
+         
+   
+   secrets:   
+     PERSONAL_ACCESS_TOKEN: 
+       required: false
+     VERACODEID: 
+       required: false
+     VERACODEKEY:
+       required: false
+env: 
+  TAG: ${{ inputs.TAG }}
+       
+            
+jobs:
+  
+  Get_variable:
+   runs-on: [ veracode ]
+   outputs:
+      variable_exists: ${{ steps.get-veracode-var.outputs.github_variable }}
+      get-tag: ${{ steps.get-tag.outputs.tag }}
+      github_var_val: ${{ steps.get-veracode-var.outputs.github_variable_value }}
+      get-branch: ${{ steps.get-tag-branch.outputs.tag }}
+      veracode_org_variable_value: ${{ steps.get-veracode-var.outputs.vera_org_variable_value }}
+      veracode_repo_variable_value: ${{ steps.get-veracode-var.outputs.infosec_vera_repo_var }}
+      veracode_policy_value: ${{ steps.get-veracode-var.outputs.veracode_policy }}
+      buildVersion: ${{ steps.get-veracode-var.outputs.buildversion }}
+   steps:
+     - name: Set Container Tag for Variable
+       id: get-tag
+       run: |   
+          if [ '${{ env.TAG }}' == '' ]
+          then
+            if [[ ${{ github.ref_name }} == \0* || ${{ github.ref_name }} == \1* || ${{ github.ref_name }} == \2*  ]]
+            then
+            tag=$(echo ${{ github.ref_name }} | sed s/-/_/g)
+            prefix=$(echo $tag | sed s/^/_/g)
+            tag_val=$(echo ${prefix//./_})
+            echo "tag=$tag_val" >> "$GITHUB_OUTPUT"
+            else
+            tag=$(echo "${{ github.ref_name }}" | sed s/-/_/g)
+            tag_val=$(echo ${tag//./_})
+            echo "tag=$tag_val" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            if [[ ${{ env.TAG }} == \0* || ${{ env.TAG }} == \1* || ${{ env.TAG }} == \2* ]]
+            then
+            tag=$(echo ${{ env.TAG }} | sed s/-/_/g)
+            prefix=$(echo $tag | sed s/^/_/g)
+            tag_val=$(echo ${prefix//./_})
+            echo "tag=$tag_val" >> "$GITHUB_OUTPUT"
+            else
+            tag=$(echo "${{ env.TAG }}" | sed s/-/_/g)
+            tag_val=$(echo ${tag//./_})
+            echo "tag=$tag_val" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+     - name: Set Tag for Deploy and branch
+       id: get-tag-branch
+       run: |   
+          if [ '${{ env.TAG }}' == '' ]
+          then
+            echo "tag=$(echo ${{ github.ref_name }})" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$(echo ${{ env.TAG }})" >> $GITHUB_OUTPUT
+          fi
+     - name: print tag
+       run:
+         echo "${{ steps.get-tag.outputs.tag }}"
+     - name: get repository variable
+       id: get-veracode-var
+       run: |  
+         VERACODE_VARIABLE=$(curl -sL -o /dev/null -w "%{http_code}" -L -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/${{ github.repository }}/actions/variables/PS_${{ steps.get-tag.outputs.tag }})
+         echo "$VERACODE_VARIABLE"
+         VERACODE_VARIABLE_VAL=PS_${{ steps.get-tag.outputs.tag }}
+         VERACODE_VARIABLE_VALUE=$(curl -L -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/${{ github.repository }}/actions/variables/PS_${{ steps.get-tag.outputs.tag }} | jq -r .value )
+         INFOSEC_VERA_REPO_VARIABLE=$(curl -sL -o /dev/null -w "%{http_code}" -L -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/${{ github.repository }}/actions/variables/INFOSEC_VERA_EXC)
+         echo  "$INFOSEC_VERA_REPO_VARIABLE"
+         INFOSEC_VERA_ORG_VARIABLE=${{ vars.INFOSEC_VERA_EXC }}   
+         VERACODE_POLICY=${{ vars.VERACODE_POLICY }} 
+         INFOSEC_VERA_REPO_VARIABLE_VALUE=${{ vars.INFOSEC_VERA_EXC }}      
+         echo "print variable value $VERACODE_VARIABLE_VALUE"
+         echo "print variable $VERACODE_VARIABLE_VAL"
+         if [ "$VERACODE_VARIABLE" -eq "200" ]; then
+         echo "github_variable=true" >> "$GITHUB_OUTPUT"
+         echo "github_variable_value=$VERACODE_VARIABLE_VALUE" >> "$GITHUB_OUTPUT"
+         else
+         echo "github_variable=false" >> "$GITHUB_OUTPUT"
+         echo "github_variable_value=doesnt_exists" >> "$GITHUB_OUTPUT"
+         fi
+         
+         echo "vera_org_variable_value=$INFOSEC_VERA_ORG_VARIABLE" >> "$GITHUB_OUTPUT"
+         echo "veracode_policy=$VERACODE_POLICY" >> "$GITHUB_OUTPUT"
+         echo $VERACODE_POLICY
+         if [ "$INFOSEC_VERA_REPO_VARIABLE" -eq "200" ]; then
+          echo "infosec_vera_repo_var=$INFOSEC_VERA_REPO_VARIABLE_VALUE" >> "$GITHUB_OUTPUT"
+         else
+          echo "infosec_vera_repo_var=false" >> "$GITHUB_OUTPUT"
+         fi
+         BUILD_VERSION=$(curl -sL -o /dev/null -w "%{http_code}" -L -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/${{ github.repository }}/actions/variables/BUILD_VERSION)
+         if [ "$BUILD_VERSION" -eq "200" ]; then
+         buildVersion="${{ vars.BUILD_VERSION }}"
+         function is_number() {
+         re='^[0-9]+([.][0-9]+)?$'
+         if [[ $1 =~ $re ]] ; then
+            return 0
+         else
+            return 1
+         fi
+         }
+         if is_number $buildVersion ; then
+           echo "$buildVersion is a number."
+           version=$(expr "$buildVersion" + 0)
+           echo " version is $version"
+           echo "buildVersion=$version" >> "$GITHUB_OUTPUT"
+         else
+           version=$(echo "$buildVersion")
+           echo "version is $version"
+           echo "buildVersion=$version" >> "$GITHUB_OUTPUT"
+         fi
+         else
+         echo "no BUILD_VERSION in this repo"
+         fi
+         
+         
+     - name: print github variable
+       run:
+         echo "${{ steps.get-veracode-var.outputs.github_variable }}"
+     - name: print github variable value
+       run:
+         echo "${{ steps.get-veracode-var.outputs.github_variable_value }}"
+     - name: print vera policy
+       run:
+         echo "${{ steps.get-veracode-var.outputs.veracode_policy }}"
+     - name: print infosec repo variable
+       run:
+         echo "${{ steps.get-veracode-var.outputs.infosec_vera_repo_var }}"
+     - name: print infosec org variable
+       run:
+         echo "${{ steps.get-veracode-var.outputs.vera_org_variable_value }}"
+         
+     
+
+  Veracode_Scan:
+    name: Veracode_Scan
+    needs: [Get_variable]
+    if: contains(needs.Get_variable.outputs.variable_exists, 'false') && contains(needs.Get_variable.outputs.veracode_policy_value, 'true')
+    uses: albertsons/esgh-central-workflow-veracode/.github/workflows/veracode-platform-scan-deploy.yml@v1
+    with:
+      branch_name: ${{ needs.Get_variable.outputs.get-branch }}
+      build_type: ${{ vars.BUILD_TYPE_VERACODE }}
+      VERACODE_APPNAME: ${{ vars.VERACODE_APPNAME }}
+      javaVersion: ${{ needs.Get_variable.outputs.buildVersion }}
+      FILEPATH: ${{ vars.FILEPATH_VERACODE }}
+      NODE_VERSION: ${{ needs.Get_variable.outputs.buildVersion }}
+      DOTNET_APPNAME: ${{ vars.DOTNET_APPNAME }}
+      MODULE: ${{ vars.MODULE }}
+      APP_NAME: ${{ vars.APP_NAME }}
+      app_code: ${{ vars.APP_CODE }}
+      Tag: ${{ github.run_number }}
+      npm_install_command: ${{ inputs.npm_install_command }}
+    secrets: 
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      VERACODEID: ${{ secrets.VERACODEID }}
+      VERACODEKEY: ${{ secrets.VERACODEKEY }} 
+
+
+
+  Create_GitHub_Variable:
+    name: Create_GitHub_Variable
+    needs: [ Get_variable, Veracode_Scan ]
+    if: ( contains(needs.Get_variable.outputs.variable_exists, 'false') ) || ( contains(needs.Get_variable.outputs.variable_exists, 'true') && contains(needs.Get_variable.outputs.github_var_val, 'false'))
+    uses: albertsons/esgh-central-workflow-veracode/.github/workflows/Create-github-variable.yml@v1
+    with:
+      TAG: ${{ inputs.TAG }}
+      variable_exists: ${{ needs.Get_variable.outputs.variable_exists }}
+      variable_value: ${{ needs.Get_variable.outputs.github_var_val }}
+      build_type: ${{ vars.BUILD_TYPE_VERACODE }}
+      veracode_scan_value: ${{  needs.Veracode_Scan.outputs.veracode_scan_result }}    
+    secrets: 
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+  
+
+  Extract_Scan_value:
+    name: Extract_Scan_value
+    needs: [ Create_GitHub_Variable ]
+    runs-on: [ veracode ]
+    outputs:
+      github_var_value_after_scan: ${{ steps.scan_value.outputs.scan_value }}
+    steps:
+      - name: Extract scan value
+        id: scan_value
+        run: |
+          echo " veracode scan value ${{ needs.Create_GitHub_Variable.outputs.github_var_value_after_scan }}"
+          echo "scan_value=${{ needs.Create_GitHub_Variable.outputs.github_var_value_after_scan }}" >> "$GITHUB_OUTPUT"
+    
