@@ -14,8 +14,12 @@ on:
         required: true
       environment:
         description: 'Environment to apply protection'
-        type: environment
+        type: choice
         required: true
+        options:
+          - development
+          - staging
+          - production
 
 jobs:
   add_tag_protection:
