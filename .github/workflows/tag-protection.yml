@@ -17,10 +17,8 @@ on:
         type: string
         required: true
 
-# Add permissions block to grant necessary access
 permissions:
   contents: write
-  administration: write
 
 jobs:
   add_tag_protection:
