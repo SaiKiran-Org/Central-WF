@@ -17,7 +17,7 @@ on:
  
 jobs:
   CHECK_BRANCH_IF_EXISTS:
-    runs-on: ubuntu
+    runs-on: ubuntu-latest
     steps:
     - name: Check Collaborator Access
       id: check_admin_access
